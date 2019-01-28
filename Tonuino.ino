@@ -6,8 +6,16 @@
 #include <SoftwareSerial.h>
 #include <avr/sleep.h>
 
-// Light Sensor
+// Lichtsensor
 unsigned int LightSensorValue;
+
+// Poti zur Lautstärkeregelung
+//byte mp3MaxVolume = 30;                       // maximal volume of DFPlayer Mini | nicht verwendet wg. MaxVolume aus neuer Tonuinoversion
+byte potilock;                                // Potilock DATA (0-1)
+int PotiPin = 7;                              // 10kOhm Poti at Pin A7
+int PotiHysterese = 2;                        // Volumenpoti Hysterese (Standarteinstellung = 2)
+int PotiValue;                                // Poti Value now, Volumen
+int oldPotiValue;                             // old Poti Value, Volumen
 
 // DFPlayer Mini
 SoftwareSerial mySoftwareSerial(2, 3); // RX, TX
@@ -556,6 +564,19 @@ void loop() {
     // Buttons werden nun über JS_Button gehandelt, dadurch kann jede Taste
     // doppelt belegt werden
     readButtons();
+    
+    // Lautstärkepoti
+    PotiValue = analogRead(PotiPin);
+    PotiValue = map(PotiValue,0,1024,0,maxVolume);
+
+    // Vergleiche aktueller Lautstärke-Potistellung mit der alten Stellung inkl. Hysterese 
+    if (PotiValue > oldPotiValue + PotiHysterese || PotiValue < oldPotiValue - PotiHysterese)  
+      {if(potilock == 0)
+         {Serial.print(F("mp3 | Volumen: "));Serial.println(PotiValue);
+          mp3.setVolume(PotiValue);
+          oldPotiValue = PotiValue;}}
+
+
 
     // admin menu
     if ((pauseButton.pressedFor(LONG_PRESS) || upButton.pressedFor(LONG_PRESS) || downButton.pressedFor(LONG_PRESS)) && pauseButton.isPressed() && upButton.isPressed() && downButton.isPressed()) {
