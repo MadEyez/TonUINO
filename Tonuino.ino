@@ -4,6 +4,7 @@
 #include <MFRC522.h>
 #include <SPI.h>
 #include <SoftwareSerial.h>
+#include <avr/sleep.h>
 
 // DFPlayer Mini
 SoftwareSerial mySoftwareSerial(2, 3); // RX, TX
@@ -122,8 +123,8 @@ void resetSettings() {
   mySettings.initVolume = 15;
   mySettings.eq = 1;
   mySettings.locked = false;
-  mySettings.standbyTimer = 5;
-  mySettings.invertVolumeButtons = false;
+  mySettings.standbyTimer = 0;
+  mySettings.invertVolumeButtons = true;
   mySettings.shortCuts[0].folder = 0;
   mySettings.shortCuts[1].folder = 0;
   mySettings.shortCuts[2].folder = 0;
@@ -167,29 +168,6 @@ void loadSettingsFromFlash() {
   Serial.print(F("Inverted Volume Buttons: "));
   Serial.println(mySettings.invertVolumeButtons);
 }
-
-/// Funktionen für den Standby Timer (z.B. über Pololu-Switch oder Mosfet)
-
-void setstandbyTimer() {
-  Serial.println(F("=== setstandbyTimer()"));
-  if (mySettings.standbyTimer != 0)
-    sleepAtMillis = millis() + (mySettings.standbyTimer * 1000);
-  else
-    sleepAtMillis = 0;
-  Serial.println(sleepAtMillis);
-}
-
-void disablestandbyTimer() {
-  Serial.println(F("=== disablestandby()"));
-  sleepAtMillis = 0;
-}
-
-void checkStandbyAtMillis() {
-  if (sleepAtMillis != 0 && millis() > sleepAtMillis) {
-    // enter sleep state
-  }
-}
-
 
 // Leider kann das Modul selbst keine Queue abspielen, daher müssen wir selbst die Queue verwalten
 static uint16_t _lastTrackFinished;
@@ -257,6 +235,7 @@ static void nextTrack(uint16_t track) {
       setstandbyTimer();
     }
   }
+  delay(500);
 }
 
 static void previousTrack() {
@@ -299,6 +278,7 @@ static void previousTrack() {
     // Fortschritt im EEPROM abspeichern
     EEPROM.update(myFolder->folder, currentTrack);
   }
+  delay(1000);
 }
 
 // MFRC522
@@ -316,6 +296,7 @@ MFRC522::StatusCode status;
 #define buttonUp A1
 #define buttonDown A2
 #define busyPin 4
+#define shutdownPin 7
 
 #define LONG_PRESS 1000
 
@@ -325,6 +306,43 @@ Button downButton(buttonDown);
 bool ignorePauseButton = false;
 bool ignoreUpButton = false;
 bool ignoreDownButton = false;
+
+
+/// Funktionen für den Standby Timer (z.B. über Pololu-Switch oder Mosfet)
+
+void setstandbyTimer() {
+  Serial.println(F("=== setstandbyTimer()"));
+  if (mySettings.standbyTimer != 0)
+    sleepAtMillis = millis() + (mySettings.standbyTimer * 60 * 1000);
+  else
+    sleepAtMillis = 0;
+  Serial.println(sleepAtMillis);
+}
+
+void disablestandbyTimer() {
+  Serial.println(F("=== disablestandby()"));
+  sleepAtMillis = 0;
+}
+
+void checkStandbyAtMillis() {
+  if (sleepAtMillis != 0 && millis() > sleepAtMillis) {
+    Serial.println(F("=== power off!"));
+    // enter sleep state
+    digitalWrite(shutdownPin, HIGH);
+    delay(500);
+
+    // http://discourse.voss.earth/t/intenso-s10000-powerbank-automatische-abschaltung-software-only/805
+    // powerdown to 27mA (powerbank switches off after 30-60s)
+    mfrc522.PCD_AntennaOff();
+    mfrc522.PCD_SoftPowerDown();
+    mp3.sleep();
+
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+    cli();  // Disable interrupts
+    sleep_mode();
+  }
+}
+
 
 bool isPlaying() {
   return !digitalRead(busyPin);
@@ -369,6 +387,7 @@ void setup() {
   mp3.begin();
   volume = mySettings.initVolume;
   mp3.setVolume(volume);
+  mp3.setEq(mySettings.eq - 1);
   // Fix für das Problem mit dem Timeout (ist jetzt in Upstream daher nicht mehr nötig!)
   //mySoftwareSerial.setTimeout(10000);
 
@@ -384,6 +403,8 @@ void setup() {
   pinMode(buttonPause, INPUT_PULLUP);
   pinMode(buttonUp, INPUT_PULLUP);
   pinMode(buttonDown, INPUT_PULLUP);
+  pinMode(shutdownPin, OUTPUT);
+  digitalWrite(shutdownPin, LOW);
 
   // RESET --- ALLE DREI KNÖPFE BEIM STARTEN GEDRÜCKT HALTEN -> alle EINSTELLUNGEN werden gelöscht
   if (digitalRead(buttonPause) == LOW && digitalRead(buttonUp) == LOW &&
@@ -433,6 +454,7 @@ void previousButton() {
 
 void playFolder() {
   disablestandbyTimer();
+  randomSeed(millis + random(1000));
   knownCard = true;
   _lastTrackFinished = 0;
   numTracksInFolder = mp3.getFolderTrackCount(myFolder->folder);
@@ -517,6 +539,8 @@ void playShortCut(uint8_t shortCut) {
   if (mySettings.shortCuts[shortCut].folder != 0) {
     myFolder = &mySettings.shortCuts[shortCut];
     playFolder();
+    disablestandbyTimer();
+    delay(1000);
   }
   else
     Serial.println(F("Shortcut not configured!"));
@@ -524,6 +548,7 @@ void playShortCut(uint8_t shortCut) {
 
 void loop() {
   do {
+    checkStandbyAtMillis();
     mp3.loop();
     // Buttons werden nun über JS_Button gehandelt, dadurch kann jede Taste
     // doppelt belegt werden
@@ -555,56 +580,70 @@ void loop() {
                ignorePauseButton == false) {
       if (isPlaying()) {
         uint8_t advertTrack;
-        if (myFolder->mode == 3 || myFolder->mode == 9)
+        if (myFolder->mode == 3 || myFolder->mode == 9) {
           advertTrack = (queue[currentTrack - 1]);
-        else
+        }
+        else {
           advertTrack = currentTrack;
+        }
         // Spezialmodus Von-Bis für Album und Party gibt die Dateinummer relativ zur Startposition wieder
-        if (myFolder->mode == 8 || myFolder->mode == 9)
+        if (myFolder->mode == 8 || myFolder->mode == 9) {
           advertTrack = advertTrack - myFolder->special + 1;
-
+        }
         mp3.playAdvertisement(advertTrack);
       }
-      else
+      else {
         playShortCut(0);
+      }
       ignorePauseButton = true;
     }
 
     if (upButton.pressedFor(LONG_PRESS)) {
       if (isPlaying()) {
-        if (!mySettings.invertVolumeButtons)
+        if (!mySettings.invertVolumeButtons) {
           volumeUpButton();
-        else
+        }
+        else {
           nextButton();
-        ignoreUpButton = true;
+        }
       }
-      else
+      else {
         playShortCut(1);
+      }
+      ignoreUpButton = true;
     } else if (upButton.wasReleased()) {
       if (!ignoreUpButton)
-        if (!mySettings.invertVolumeButtons)
+        if (!mySettings.invertVolumeButtons) {
           nextButton();
-        else
+        }
+        else {
           volumeUpButton();
+        }
       ignoreUpButton = false;
     }
 
     if (downButton.pressedFor(LONG_PRESS)) {
       if (isPlaying()) {
-        if (!mySettings.invertVolumeButtons)
+        if (!mySettings.invertVolumeButtons) {
           volumeDownButton();
-        else
+        }
+        else {
           previousButton();
-        ignoreDownButton = true;
+        }
       }
-      else
+      else {
         playShortCut(2);
+      }
+      ignoreDownButton = true;
     } else if (downButton.wasReleased()) {
-      if (!ignoreDownButton)
-        if (!mySettings.invertVolumeButtons)
+      if (!ignoreDownButton) {
+        if (!mySettings.invertVolumeButtons) {
           previousButton();
-        else
+        }
+        else {
           volumeDownButton();
+        }
+      }
       ignoreDownButton = false;
     }
     // Ende der Buttons
@@ -646,18 +685,23 @@ void adminMenu() {
     mfrc522.PICC_HaltA();
     mfrc522.PCD_StopCrypto1();
   }
-  else if (subMenu == 2)
+  else if (subMenu == 2) {
     // Maximum Volume
     mySettings.maxVolume = voiceMenu(30, 930, 0, false, false, mySettings.maxVolume);
-  else if (subMenu == 3)
+  }
+  else if (subMenu == 3) {
     // Minimum Volume
     mySettings.minVolume = voiceMenu(30, 931, 0, false, false, mySettings.minVolume);
-  else if (subMenu == 4)
+  }
+  else if (subMenu == 4) {
     // Initial Volume
     mySettings.initVolume = voiceMenu(30, 932, 0, false, false, mySettings.initVolume);
-  else if (subMenu == 5)
+  }
+  else if (subMenu == 5) {
     // EQ
     mySettings.eq = voiceMenu(6, 920, 920, false, false, mySettings.eq);
+    mp3.setEq(mySettings.eq - 1);
+  }
   else if (subMenu == 6) {
     // create master card
   }
@@ -667,7 +711,13 @@ void adminMenu() {
     mp3.playMp3FolderTrack(400);
   }
   else if (subMenu == 8) {
-    // Den Standbytimer konfigurieren
+    switch (voiceMenu(5, 960, 960)) {
+      case 1: mySettings.standbyTimer = 5; break;
+      case 2: mySettings.standbyTimer = 15; break;
+      case 3: mySettings.standbyTimer = 30; break;
+      case 4: mySettings.standbyTimer = 60; break;
+      case 5: mySettings.standbyTimer = 0; break;
+    }
   }
   else if (subMenu == 9) {
     // Create Cards for Folder
@@ -712,10 +762,12 @@ void adminMenu() {
   else if (subMenu == 10) {
     // Invert Functions for Up/Down Buttons
     int temp = voiceMenu(2, 933, 933, false);
-    if (temp == 2)
+    if (temp == 2) {
       mySettings.invertVolumeButtons = true;
-    else
+    }
+    else {
       mySettings.invertVolumeButtons = false;
+    }
   }
   writeSettingsToFlash();
   setstandbyTimer();
@@ -773,14 +825,16 @@ uint8_t voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
         mp3.playMp3FolderTrack(messageOffset + returnValue);
         if (preview) {
           waitForTrackToFinish();
-          if (previewFromFolder == 0)
+          if (previewFromFolder == 0) {
             mp3.playFolderTrack(returnValue, 1);
-          else
+          } else {
             mp3.playFolderTrack(previewFromFolder, returnValue);
+          }
           delay(1000);
         }
-      } else
+      } else {
         ignoreUpButton = false;
+      }
     }
 
     if (downButton.pressedFor(LONG_PRESS)) {
@@ -804,14 +858,17 @@ uint8_t voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
         mp3.playMp3FolderTrack(messageOffset + returnValue);
         if (preview) {
           waitForTrackToFinish();
-          if (previewFromFolder == 0)
+          if (previewFromFolder == 0) {
             mp3.playFolderTrack(returnValue, 1);
-          else
+          }
+          else {
             mp3.playFolderTrack(previewFromFolder, returnValue);
+          }
           delay(1000);
         }
-      } else
+      } else {
         ignoreDownButton = false;
+      }
     }
   } while (true);
 }
@@ -889,9 +946,23 @@ bool readCard(nfcTagObject * nfcTag) {
   byte size = sizeof(buffer);
 
   // Authenticate using key A
-  Serial.println(F("Authenticating using key A..."));
-  status = (MFRC522::StatusCode)mfrc522.PCD_Authenticate(
-             MFRC522::PICC_CMD_MF_AUTH_KEY_A, trailerBlock, &key, &(mfrc522.uid));
+  if ((piccType == MFRC522::PICC_TYPE_MIFARE_MINI ) ||
+      (piccType == MFRC522::PICC_TYPE_MIFARE_1K ) ||
+      (piccType == MFRC522::PICC_TYPE_MIFARE_4K ) )
+  {
+    Serial.println(F("Authenticating Classic using key A..."));
+    status = mfrc522.PCD_Authenticate(
+               MFRC522::PICC_CMD_MF_AUTH_KEY_A, trailerBlock, &key, &(mfrc522.uid));
+  }
+  else if (piccType == MFRC522::PICC_TYPE_MIFARE_UL )
+  {
+    byte pACK[] = {0, 0}; //16 bit PassWord ACK returned by the NFCtag
+
+    // Authenticate using key A
+    Serial.println(F("Authenticating MIFARE UL..."));
+    status = mfrc522.PCD_NTAG216_AUTH(key.keyByte, pACK);
+  }
+
   if (status != MFRC522::STATUS_OK) {
     returnValue = false;
     Serial.print(F("PCD_Authenticate() failed: "));
@@ -900,22 +971,64 @@ bool readCard(nfcTagObject * nfcTag) {
   }
 
   // Show the whole sector as it currently is
-  Serial.println(F("Current data in sector:"));
-  mfrc522.PICC_DumpMifareClassicSectorToSerial(&(mfrc522.uid), &key, sector);
-  Serial.println();
+  // Serial.println(F("Current data in sector:"));
+  // mfrc522.PICC_DumpMifareClassicSectorToSerial(&(mfrc522.uid), &key, sector);
+  // Serial.println();
 
   // Read data from the block
-  Serial.print(F("Reading data from block "));
-  Serial.print(blockAddr);
-  Serial.println(F(" ..."));
-  status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(blockAddr, buffer, &size);
-  if (status != MFRC522::STATUS_OK) {
-    returnValue = false;
-    Serial.print(F("MIFARE_Read() failed: "));
-    Serial.println(mfrc522.GetStatusCodeName(status));
+  if ((piccType == MFRC522::PICC_TYPE_MIFARE_MINI ) ||
+      (piccType == MFRC522::PICC_TYPE_MIFARE_1K ) ||
+      (piccType == MFRC522::PICC_TYPE_MIFARE_4K ) )
+  {
+    Serial.print(F("Reading data from block "));
+    Serial.print(blockAddr);
+    Serial.println(F(" ..."));
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(blockAddr, buffer, &size);
+    if (status != MFRC522::STATUS_OK) {
+      returnValue = false;
+      Serial.print(F("MIFARE_Read() failed: "));
+      Serial.println(mfrc522.GetStatusCodeName(status));
+    }
   }
-  Serial.print(F("Data in block "));
-  Serial.print(blockAddr);
+  else if (piccType == MFRC522::PICC_TYPE_MIFARE_UL )
+  {
+    byte buffer2[18];
+    byte size2 = sizeof(buffer2);
+
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(8, buffer2, &size2);
+    if (status != MFRC522::STATUS_OK) {
+      returnValue = false;
+      Serial.print(F("MIFARE_Read_1() failed: "));
+      Serial.println(mfrc522.GetStatusCodeName(status));
+    }
+    memcpy(buffer, buffer2, 4);
+
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(9, buffer2, &size2);
+    if (status != MFRC522::STATUS_OK) {
+      returnValue = false;
+      Serial.print(F("MIFARE_Read_2() failed: "));
+      Serial.println(mfrc522.GetStatusCodeName(status));
+    }
+    memcpy(buffer + 4, buffer2, 4);
+
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(10, buffer2, &size2);
+    if (status != MFRC522::STATUS_OK) {
+      returnValue = false;
+      Serial.print(F("MIFARE_Read_3() failed: "));
+      Serial.println(mfrc522.GetStatusCodeName(status));
+    }
+    memcpy(buffer + 8, buffer2, 4);
+
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Read(11, buffer2, &size2);
+    if (status != MFRC522::STATUS_OK) {
+      returnValue = false;
+      Serial.print(F("MIFARE_Read_4() failed: "));
+      Serial.println(mfrc522.GetStatusCodeName(status));
+    }
+    memcpy(buffer + 12, buffer2, 4);
+  }
+
+  Serial.print(F("Data on Card "));
   Serial.println(F(":"));
   dump_byte_array(buffer, 16);
   Serial.println();
@@ -935,6 +1048,7 @@ bool readCard(nfcTagObject * nfcTag) {
   nfcTag->nfcFolderSettings.special2 = buffer[8];
 
   myFolder = &nfcTag->nfcFolderSettings;
+
   return returnValue;
 }
 
@@ -955,9 +1069,24 @@ void writeCard(nfcTagObject nfcTag) {
   mifareType = mfrc522.PICC_GetType(mfrc522.uid.sak);
 
   // Authenticate using key B
-  Serial.println(F("Authenticating again using key B..."));
-  status = (MFRC522::StatusCode)mfrc522.PCD_Authenticate(
-             MFRC522::PICC_CMD_MF_AUTH_KEY_B, trailerBlock, &key, &(mfrc522.uid));
+  //authentificate with the card and set card specific parameters
+  if ((mifareType == MFRC522::PICC_TYPE_MIFARE_MINI ) ||
+      (mifareType == MFRC522::PICC_TYPE_MIFARE_1K ) ||
+      (mifareType == MFRC522::PICC_TYPE_MIFARE_4K ) )
+  {
+    Serial.println(F("Authenticating again using key B..."));
+    status = mfrc522.PCD_Authenticate(
+               MFRC522::PICC_CMD_MF_AUTH_KEY_B, trailerBlock, &key, &(mfrc522.uid));
+  }
+  else if (mifareType == MFRC522::PICC_TYPE_MIFARE_UL )
+  {
+    byte pACK[] = {0, 0}; //16 bit PassWord ACK returned by the NFCtag
+
+    // Authenticate using key A
+    Serial.println(F("Authenticating UL..."));
+    status = mfrc522.PCD_NTAG216_AUTH(key.keyByte, pACK);
+  }
+
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("PCD_Authenticate() failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
@@ -971,7 +1100,35 @@ void writeCard(nfcTagObject nfcTag) {
   Serial.println(F(" ..."));
   dump_byte_array(buffer, 16);
   Serial.println();
-  status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(blockAddr, buffer, 16);
+
+  if ((mifareType == MFRC522::PICC_TYPE_MIFARE_MINI ) ||
+      (mifareType == MFRC522::PICC_TYPE_MIFARE_1K ) ||
+      (mifareType == MFRC522::PICC_TYPE_MIFARE_4K ) )
+  {
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(blockAddr, buffer, 16);
+  }
+  else if (mifareType == MFRC522::PICC_TYPE_MIFARE_UL )
+  {
+    byte buffer2[16];
+    byte size2 = sizeof(buffer2);
+
+    memset(buffer2, 0, size2);
+    memcpy(buffer2, buffer, 4);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(8, buffer2, 16);
+
+    memset(buffer2, 0, size2);
+    memcpy(buffer2, buffer + 4, 4);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(9, buffer2, 16);
+
+    memset(buffer2, 0, size2);
+    memcpy(buffer2, buffer + 8, 4);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(10, buffer2, 16);
+
+    memset(buffer2, 0, size2);
+    memcpy(buffer2, buffer + 12, 4);
+    status = (MFRC522::StatusCode)mfrc522.MIFARE_Write(11, buffer2, 16);
+  }
+
   if (status != MFRC522::STATUS_OK) {
     Serial.print(F("MIFARE_Write() failed: "));
     Serial.println(mfrc522.GetStatusCodeName(status));
@@ -982,6 +1139,7 @@ void writeCard(nfcTagObject nfcTag) {
   Serial.println();
   delay(100);
 }
+
 
 
 /**
