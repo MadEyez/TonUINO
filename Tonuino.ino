@@ -567,7 +567,7 @@ void loop() {
     
     // Lautstärkepoti
     PotiValue = analogRead(PotiPin);
-    PotiValue = map(PotiValue,0,1024,0,maxVolume);
+    PotiValue = map(PotiValue,0,1024,0,mySettings.maxVolume);
 
     // Vergleiche aktueller Lautstärke-Potistellung mit der alten Stellung inkl. Hysterese 
     if (PotiValue > oldPotiValue + PotiHysterese || PotiValue < oldPotiValue - PotiHysterese)  
