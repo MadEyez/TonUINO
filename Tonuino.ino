@@ -13,9 +13,9 @@ unsigned int LightSensorValue;
 //byte mp3MaxVolume = 30;                       // maximal volume of DFPlayer Mini | nicht verwendet wg. MaxVolume aus neuer Tonuinoversion
 byte potilock;                                // Potilock DATA (0-1)
 int PotiPin = 7;                              // 10kOhm Poti at Pin A7
-int PotiHysteresis = 2;                        // Volumenpoti Hysterese (Standarteinstellung = 2)
-int PotiValue;                                // Poti Value now, Volumen
-int oldPotiValue;                             // old Poti Value, Volumen
+int PotiHysteresis = 2;                        // Lautstärkepoti Hysterese (Standarteinstellung = 2)
+int PotiValue;                                // Poti Value now, Lautstärke
+int oldPotiValue;                             // old Poti Value, Lautstärke
 
 // DFPlayer Mini
 SoftwareSerial mySoftwareSerial(2, 3); // RX, TX
@@ -572,7 +572,7 @@ void loop() {
     // Vergleiche aktueller Lautstärke-Potistellung mit der alten Stellung inkl. Hysterese
     if (PotiValue > oldPotiValue + PotiHysteresis || PotiValue < oldPotiValue - PotiHysteresis)  
       {if(potilock == 0)
-         {Serial.print(F("mp3 | Volumen: "));Serial.println(PotiValue);
+         {Serial.print(F("mp3 | Lautstärke: "));Serial.println(PotiValue);
           mp3.setVolume(PotiValue);
           oldPotiValue = PotiValue;}}
 
