@@ -6,7 +6,7 @@
 #include <SoftwareSerial.h>
 #include <avr/sleep.h>
 
-// Lichtsensor
+// Lichtsensor -- individuell
 unsigned int LightSensorValue;
 
 // Poti zur Lautstärkeregelung
@@ -17,7 +17,7 @@ int PotiHysteresis = 2;                        // Lautstärkepoti Hysterese (Sta
 int PotiValue;                                // Poti Value now, Lautstärke
 int oldPotiValue;                             // old Poti Value, Lautstärke
 
-// DFPlayer Mini
+// DFPlayer Mini -- individuell
 SoftwareSerial mySoftwareSerial(2, 3); // RX, TX
 uint16_t numTracksInFolder;
 uint16_t currentTrack;
@@ -388,6 +388,10 @@ void setup() {
   // Busy Pin
   pinMode(busyPin, INPUT);
 
+  // Status-LED für Powerbutton -- individuell
+  pinMode(7, OUTPUT);
+  digitalWrite(7, HIGH);
+
   // load Settings from EEPROM
   loadSettingsFromFlash();
 
@@ -567,7 +571,7 @@ void loop() {
     // doppelt belegt werden
     readButtons();
 
-    // Lautstärkepoti
+    // Lautstärkepoti -- individuell
     PotiValue = analogRead(PotiPin);
     PotiValue = map(PotiValue,0,1024,0,mySettings.maxVolume);
 
