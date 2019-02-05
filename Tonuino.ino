@@ -582,6 +582,26 @@ void loop() {
           mp3.setVolume(PotiValue);
           oldPotiValue = PotiValue;}}
 
+    // Lichtsensor abfragen und Wert ausgeben
+    LightSensorValue = analogRead(A6);
+    if (LightSensorValue == 1012 or LightSensorValue == 1013) {
+      Serial.println((String)LightSensorValue + " --> 4/4");
+    }
+    else if (LightSensorValue == 1014 or LightSensorValue == 1015 or LightSensorValue == 1016) {
+      Serial.println((String)LightSensorValue + " --> 3/4");
+    }
+    else if (LightSensorValue == 1017 or LightSensorValue == 1018) {
+      Serial.println((String)LightSensorValue + " --> 2/4");
+    }
+    else if (LightSensorValue == 1019 or LightSensorValue == 1020) {
+      Serial.println((String)LightSensorValue + " --> 1/4");
+    }
+    else if (LightSensorValue == 1021 or LightSensorValue == 1022 or LightSensorValue == 1023) {
+      Serial.println((String)LightSensorValue + " --> 0/4");
+    }
+    else {
+      Serial.println((String)LightSensorValue + " --> außerhalb");
+    }
 
 
     // admin menu
@@ -699,21 +719,6 @@ void loop() {
   }
   mfrc522.PICC_HaltA();
   mfrc522.PCD_StopCrypto1();
-
-  // Lichtsensor abfragen und Wert ausgeben
-  LightSensorValue = analogRead(A6);
-if (LightSensorValue == 1012 or LightSensorValue == 1013)
-{Serial.println((String)LightSensorValue + " --> 4/4");}
-else if (LightSensorValue == 1014 or LightSensorValue == 1015 or LightSensorValue == 1016)
-{Serial.println((String)LightSensorValue + " --> 3/4");}
-else if (LightSensorValue == 1017 or LightSensorValue == 1018)
-{Serial.println((String)LightSensorValue + " --> 2/4");}
-else if (LightSensorValue == 1019 or LightSensorValue == 1020)
-{Serial.println((String)LightSensorValue + " --> 1/4");}
-else if (LightSensorValue == 1021 or LightSensorValue == 1022 or LightSensorValue == 1023)
-{Serial.println((String)LightSensorValue + " --> 0/4");}
-else
-{Serial.println((String)LightSensorValue + " --> außerhalb");}
 }
 
 void adminMenu() {
