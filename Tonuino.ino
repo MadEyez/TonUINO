@@ -7,7 +7,10 @@
 #include <avr/sleep.h>
 
 // Lichtsensor -- individuell
+int LightSensorPin = 6;
+int LightSensorHysteresis = 0;
 unsigned int LightSensorValue;
+unsigned int oldLightSensorValue;
 
 // Poti zur Lautstärkeregelung
 //byte mp3MaxVolume = 30;                       // maximal volume of DFPlayer Mini | nicht verwendet wg. MaxVolume aus neuer Tonuinoversion
@@ -576,33 +579,42 @@ void loop() {
     PotiValue = map(PotiValue,0,1023,0,mySettings.maxVolume);
 
     // Vergleiche aktueller Lautstärke-Potistellung mit der alten Stellung inkl. Hysterese
-    if (PotiValue > oldPotiValue + PotiHysteresis || PotiValue < oldPotiValue - PotiHysteresis)  
-      {if(potilock == 0)
-         {Serial.print(F("mp3 | Lautstärke: "));Serial.println(PotiValue);
-          mp3.setVolume(PotiValue);
-          oldPotiValue = PotiValue;}}
+    if (PotiValue > oldPotiValue + PotiHysteresis || PotiValue < oldPotiValue - PotiHysteresis)  { 
+      if(potilock == 0) {
+        Serial.print(F("mp3 | Lautstärke: "));Serial.println(PotiValue);
+        mp3.setVolume(PotiValue);
+        oldPotiValue = PotiValue;
+      }
+    }
 
     // Lichtsensor abfragen und Wert ausgeben
-    LightSensorValue = analogRead(A6);
-    if (LightSensorValue == 1012 or LightSensorValue == 1013) {
-      Serial.println((String)LightSensorValue + " --> 4/4");
+    LightSensorValue = analogRead(LightSensorPin);
+    if (LightSensorValue > oldLightSensorValue + LightSensorHysteresis || LightSensorValue < oldLightSensorValue - LightSensorHysteresis)  { 
+      if (LightSensorValue == 1012 or LightSensorValue == 1013) {
+        Serial.println((String)LightSensorValue + " --> 4/4");
+        oldLightSensorValue = LightSensorValue;
+      }
+      else if (LightSensorValue == 1014 or LightSensorValue == 1015 or LightSensorValue == 1016) {
+        Serial.println((String)LightSensorValue + " --> 3/4");
+        oldLightSensorValue = LightSensorValue;
+      }
+      else if (LightSensorValue == 1017 or LightSensorValue == 1018) {
+        Serial.println((String)LightSensorValue + " --> 2/4");
+        oldLightSensorValue = LightSensorValue;
+      }
+      else if (LightSensorValue == 1019 or LightSensorValue == 1020) {
+        Serial.println((String)LightSensorValue + " --> 1/4");
+        oldLightSensorValue = LightSensorValue;
+      }
+      else if (LightSensorValue == 1021 or LightSensorValue == 1022 or LightSensorValue == 1023) {
+        Serial.println((String)LightSensorValue + " --> 0/4");
+        oldLightSensorValue = LightSensorValue;
+      }
+      else {
+        Serial.println((String)LightSensorValue + " --> außerhalb");
+        oldLightSensorValue = LightSensorValue;
+      }
     }
-    else if (LightSensorValue == 1014 or LightSensorValue == 1015 or LightSensorValue == 1016) {
-      Serial.println((String)LightSensorValue + " --> 3/4");
-    }
-    else if (LightSensorValue == 1017 or LightSensorValue == 1018) {
-      Serial.println((String)LightSensorValue + " --> 2/4");
-    }
-    else if (LightSensorValue == 1019 or LightSensorValue == 1020) {
-      Serial.println((String)LightSensorValue + " --> 1/4");
-    }
-    else if (LightSensorValue == 1021 or LightSensorValue == 1022 or LightSensorValue == 1023) {
-      Serial.println((String)LightSensorValue + " --> 0/4");
-    }
-    else {
-      Serial.println((String)LightSensorValue + " --> außerhalb");
-    }
-
 
     // admin menu
     if ((pauseButton.pressedFor(LONG_PRESS) || upButton.pressedFor(LONG_PRESS) || downButton.pressedFor(LONG_PRESS)) && pauseButton.isPressed() && upButton.isPressed() && downButton.isPressed()) {
