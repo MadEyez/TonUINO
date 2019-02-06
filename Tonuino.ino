@@ -11,6 +11,8 @@ int LightSensorPin = 6;
 int LightSensorHysteresis = 0;
 unsigned int LightSensorValue;
 unsigned int oldLightSensorValue;
+int period = 10000;
+unsigned long TimeNow = 0;
 
 // Poti zur Lautstärkeregelung
 //byte mp3MaxVolume = 30;                       // maximal volume of DFPlayer Mini | nicht verwendet wg. MaxVolume aus neuer Tonuinoversion
@@ -592,30 +594,33 @@ void loop() {
 
     // Lichtsensor abfragen und Wert ausgeben
     LightSensorValue = analogRead(LightSensorPin);
-    if (LightSensorValue > oldLightSensorValue + LightSensorHysteresis || LightSensorValue < oldLightSensorValue - LightSensorHysteresis)  { 
-      if (LightSensorValue == 1012 or LightSensorValue == 1013) {
-        Serial.println((String)LightSensorValue + " --> 4/4");
-        oldLightSensorValue = LightSensorValue;
-      }
-      else if (LightSensorValue == 1014 or LightSensorValue == 1015 or LightSensorValue == 1016) {
-        Serial.println((String)LightSensorValue + " --> 3/4");
-        oldLightSensorValue = LightSensorValue;
-      }
-      else if (LightSensorValue == 1017 or LightSensorValue == 1018) {
-        Serial.println((String)LightSensorValue + " --> 2/4");
-        oldLightSensorValue = LightSensorValue;
-      }
-      else if (LightSensorValue == 1019 or LightSensorValue == 1020) {
-        Serial.println((String)LightSensorValue + " --> 1/4");
-        oldLightSensorValue = LightSensorValue;
-      }
-      else if (LightSensorValue == 1021 or LightSensorValue == 1022 or LightSensorValue == 1023) {
-        Serial.println((String)LightSensorValue + " --> 0/4");
-        oldLightSensorValue = LightSensorValue;
-      }
-      else {
-        Serial.println((String)LightSensorValue + " --> außerhalb");
-        oldLightSensorValue = LightSensorValue;
+    if (millis() > TimeNow + period) {
+      TimeNow = millis();
+      if (LightSensorValue > oldLightSensorValue + LightSensorHysteresis || LightSensorValue < oldLightSensorValue - LightSensorHysteresis)  { 
+        if (LightSensorValue == 1012 or LightSensorValue == 1013) {
+          Serial.println((String)LightSensorValue + " --> 4/4");
+          oldLightSensorValue = LightSensorValue;
+        }
+        else if (LightSensorValue == 1014 or LightSensorValue == 1015 or LightSensorValue == 1016) {
+          Serial.println((String)LightSensorValue + " --> 3/4");
+          oldLightSensorValue = LightSensorValue;
+        }
+        else if (LightSensorValue == 1017 or LightSensorValue == 1018) {
+          Serial.println((String)LightSensorValue + " --> 2/4");
+          oldLightSensorValue = LightSensorValue;
+        }
+        else if (LightSensorValue == 1019 or LightSensorValue == 1020) {
+          Serial.println((String)LightSensorValue + " --> 1/4");
+          oldLightSensorValue = LightSensorValue;
+        }
+        else if (LightSensorValue == 1021 or LightSensorValue == 1022 or LightSensorValue == 1023) {
+          Serial.println((String)LightSensorValue + " --> 0/4");
+          oldLightSensorValue = LightSensorValue;
+        }
+        else {
+          Serial.println((String)LightSensorValue + " --> außerhalb");
+          oldLightSensorValue = LightSensorValue;
+        }
       }
     }
 
