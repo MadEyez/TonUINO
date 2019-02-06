@@ -456,7 +456,7 @@ void previousButton() {
 
 void playFolder() {
   disablestandbyTimer();
-  randomSeed(millis + random(1000));
+  randomSeed(millis() + random(1000));
   knownCard = true;
   _lastTrackFinished = 0;
   numTracksInFolder = mp3.getFolderTrackCount(myFolder->folder);
@@ -497,7 +497,10 @@ void playFolder() {
   if (myFolder->mode == 5) {
     Serial.println(F("Hörbuch Modus -> kompletten Ordner spielen und "
                      "Fortschritt merken"));
-    currentTrack = max(1, EEPROM.read(myFolder->folder));
+    currentTrack = EEPROM.read(myFolder->folder);
+    if (currentTrack == 0 || currentTrack > numTracksInFolder) {
+      currentTrack = 1;
+    }
     mp3.playFolderTrack(myFolder->folder, currentTrack);
   }
   // Spezialmodus Von-Bin: Hörspiel: eine zufällige Datei aus dem Ordner
@@ -658,7 +661,7 @@ void loop() {
 
   if (readCard(&myCard) == true) {
     // make random a little bit more "random"
-    randomSeed(millis());
+    randomSeed(millis() + random(1000));
     if (myCard.cookie == 322417479 && myFolder->folder != 0 && myFolder->mode != 0) {
       playFolder();
     }
