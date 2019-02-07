@@ -7,7 +7,7 @@
 #include <avr/sleep.h>
 
 // Lichtsensor -- individuell
-int LightSensorPin = 6;
+int LightSensorPin = 5;
 int LightSensorHysteresis = 0;
 unsigned int LightSensorValue;
 unsigned int oldLightSensorValue;
@@ -17,7 +17,7 @@ unsigned long TimeNow = 0;
 // Poti zur Lautstärkeregelung
 //byte mp3MaxVolume = 30;                       // maximal volume of DFPlayer Mini | nicht verwendet wg. MaxVolume aus neuer Tonuinoversion
 byte potilock;                                // Potilock DATA (0-1)
-int PotiPin = 7;                              // 10kOhm Poti at Pin A7
+int PotiPin = 6;                              // 10kOhm Poti at Pin A6
 int PotiHysteresis = 2;                        // Lautstärkepoti Hysterese (Standarteinstellung = 2)
 int PotiValue;                                // Poti Value now, Lautstärke
 int oldPotiValue;                             // old Poti Value, Lautstärke
