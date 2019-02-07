@@ -379,7 +379,7 @@ void waitForTrackToFinish() {
 void setup() {
 
   Serial.begin(115200); // Es gibt ein paar Debug Ausgaben über die serielle Schnittstelle
-  randomSeed(analogRead(A5)); // Zufallsgenerator initialisieren
+  randomSeed(analogRead(A7)); // Zufallsgenerator initialisieren
 
   // Dieser Hinweis darf nicht entfernt werden
   Serial.println(F("\n _____         _____ _____ _____ _____"));
