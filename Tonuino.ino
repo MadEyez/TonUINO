@@ -8,6 +8,10 @@
 
 static const uint32_t cardCookie = 322417479;
 
+//RGB-LED -- individuell
+int redPin = 5;
+int greenPin = 6;
+
 // Lichtsensor -- individuell
 int LightSensorPin = 5;
 int LightSensorHysteresis = 0;
@@ -399,6 +403,10 @@ void setup() {
   pinMode(7, OUTPUT);
   digitalWrite(7, HIGH);
 
+  //RGB-LED -- individuell
+  pinMode(redPin, OUTPUT);
+  pinMode(greenPin, OUTPUT);
+
   // load Settings from EEPROM
   loadSettingsFromFlash();
 
@@ -601,22 +609,27 @@ void loop() {
       if (LightSensorValue > oldLightSensorValue + LightSensorHysteresis || LightSensorValue < oldLightSensorValue - LightSensorHysteresis)  { 
         if (LightSensorValue == 1012 or LightSensorValue == 1013) {
           Serial.println((String)LightSensorValue + " --> 4/4");
+          setColor(0, 30);
           oldLightSensorValue = LightSensorValue;
         }
         else if (LightSensorValue == 1014 or LightSensorValue == 1015 or LightSensorValue == 1016) {
           Serial.println((String)LightSensorValue + " --> 3/4");
+          setColor(255, 30);
           oldLightSensorValue = LightSensorValue;
         }
         else if (LightSensorValue == 1017 or LightSensorValue == 1018) {
           Serial.println((String)LightSensorValue + " --> 2/4");
+          setColor(255, 15);
           oldLightSensorValue = LightSensorValue;
         }
         else if (LightSensorValue == 1019 or LightSensorValue == 1020) {
           Serial.println((String)LightSensorValue + " --> 1/4");
+          setColor(255, 0);
           oldLightSensorValue = LightSensorValue;
         }
         else if (LightSensorValue == 1021 or LightSensorValue == 1022 or LightSensorValue == 1023) {
           Serial.println((String)LightSensorValue + " --> 0/4");
+          setColor(0, 0);
           oldLightSensorValue = LightSensorValue;
         }
         else {
@@ -1210,7 +1223,15 @@ void writeCard(nfcTagObject nfcTag) {
   delay(100);
 }
 
-
+//RGB-LED ansteuern
+void setColor(int red, int green, int blue)
+{
+     red = 255 - red;
+    green = 255 - green;
+    blue = 1 - blue;
+   analogWrite(redPin, red);
+  analogWrite(greenPin, green);
+ }
 
 /**
    Helper routine to dump a byte array as hex values to Serial.
