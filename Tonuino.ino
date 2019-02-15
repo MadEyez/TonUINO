@@ -1224,12 +1224,11 @@ void writeCard(nfcTagObject nfcTag) {
 }
 
 //RGB-LED ansteuern
-void setColor(int red, int green, int blue)
+void setColor(int red, int green)
 {
-     red = 255 - red;
-    green = 255 - green;
-    blue = 1 - blue;
-   analogWrite(redPin, red);
+  red = 255 - red;
+  green = 255 - green;
+  analogWrite(redPin, red);
   analogWrite(greenPin, green);
  }
 
