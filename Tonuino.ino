@@ -6,6 +6,20 @@
 #include <SoftwareSerial.h>
 #include <avr/sleep.h>
 
+/*
+   _____         _____ _____ _____ _____
+  |_   _|___ ___|  |  |     |   | |     |
+    | | | . |   |  |  |-   -| | | |  |  |
+    |_| |___|_|_|_____|_____|_|___|_____|
+    TonUINO Version 2.1
+
+    created by Thorsten Voß and licensed under GNU/GPL.
+    Information and contribution at https://tonuino.de.
+*/
+
+// uncomment the below line to enable five button support
+//#define FIVEBUTTONS
+
 static const uint32_t cardCookie = 322417479;
 
 //RGB-LED -- individuell
@@ -320,15 +334,27 @@ MFRC522::StatusCode status;
 #define busyPin 4
 #define shutdownPin 7
 
+#ifdef FIVEBUTTONS
+#define buttonFourPin A3
+#define buttonFivePin A4
+#endif
+
 #define LONG_PRESS 1000
 
 Button pauseButton(buttonPause);
 Button upButton(buttonUp);
 Button downButton(buttonDown);
+#ifdef FIVEBUTTONS
+Button buttonFour(buttonFourPin);
+Button buttonFive(buttonFivePin);
+#endif
 bool ignorePauseButton = false;
 bool ignoreUpButton = false;
 bool ignoreDownButton = false;
-
+#ifdef FIVEBUTTONS
+bool ignoreButtonFour = false;
+bool ignoreButtonFive = false;
+#endif
 
 /// Funktionen für den Standby Timer (z.B. über Pololu-Switch oder Mosfet)
 
@@ -435,17 +461,22 @@ void setup() {
   pinMode(buttonPause, INPUT_PULLUP);
   pinMode(buttonUp, INPUT_PULLUP);
   pinMode(buttonDown, INPUT_PULLUP);
+#ifdef FIVEBUTTONS
+  pinMode(buttonFourPin, INPUT_PULLUP);
+  pinMode(buttonFivePin, INPUT_PULLUP);
+#endif
   pinMode(shutdownPin, OUTPUT);
   digitalWrite(shutdownPin, LOW);
 
-  // RESET --- ALLE DREI KNÖPFE BEIM STARTEN GEDRÜCKT HALTEN -> alle EINSTELLUNGEN werden gelöscht
-  if (digitalRead(buttonPause) == LOW && digitalRead(buttonUp) == LOW &&
-      digitalRead(buttonDown) == LOW) {
-    Serial.println(F("Reset -> EEPROM wird gelöscht"));
-    for (int i = 0; i < EEPROM.length(); i++) {
-      EEPROM.update(i, 0);
+  /*  // RESET --- ALLE DREI KNÖPFE BEIM STARTEN GEDRÜCKT HALTEN -> alle EINSTELLUNGEN werden gelöscht
+    if (digitalRead(buttonPause) == LOW && digitalRead(buttonUp) == LOW &&
+        digitalRead(buttonDown) == LOW) {
+      Serial.println(F("Reset -> EEPROM wird gelöscht"));
+      for (int i = 0; i < EEPROM.length(); i++) {
+        EEPROM.update(i, 0);
+      }
     }
-  }
+  */
   // Start Shortcut "at Startup" - e.g. Welcome Sound
   playShortCut(3);
 }
@@ -454,6 +485,10 @@ void readButtons() {
   pauseButton.read();
   upButton.read();
   downButton.read();
+#ifdef FIVEBUTTONS
+  buttonFour.read();
+  buttonFive.read();
+#endif
 }
 
 void volumeUpButton() {
@@ -684,6 +719,7 @@ void loop() {
     }
 
     if (upButton.pressedFor(LONG_PRESS)) {
+#ifndef FIVEBUTTONS
       if (isPlaying()) {
         if (!mySettings.invertVolumeButtons) {
           volumeUpButton();
@@ -696,6 +732,7 @@ void loop() {
         playShortCut(1);
       }
       ignoreUpButton = true;
+#endif
     } else if (upButton.wasReleased()) {
       if (!ignoreUpButton)
         if (!mySettings.invertVolumeButtons) {
@@ -708,6 +745,7 @@ void loop() {
     }
 
     if (downButton.pressedFor(LONG_PRESS)) {
+#ifndef FIVEBUTTONS
       if (isPlaying()) {
         if (!mySettings.invertVolumeButtons) {
           volumeDownButton();
@@ -720,6 +758,7 @@ void loop() {
         playShortCut(2);
       }
       ignoreDownButton = true;
+#endif
     } else if (downButton.wasReleased()) {
       if (!ignoreDownButton) {
         if (!mySettings.invertVolumeButtons) {
@@ -731,6 +770,34 @@ void loop() {
       }
       ignoreDownButton = false;
     }
+#ifdef FIVEBUTTONS
+    if (buttonFour.wasReleased()) {
+      if (isPlaying()) {
+        if (!mySettings.invertVolumeButtons) {
+          volumeUpButton();
+        }
+        else {
+          nextButton();
+        }
+      }
+      else {
+        playShortCut(1);
+      }
+    }
+    if (buttonFive.wasReleased()) {
+      if (isPlaying()) {
+        if (!mySettings.invertVolumeButtons) {
+          volumeDownButton();
+        }
+        else {
+          previousButton();
+        }
+      }
+      else {
+        playShortCut(2);
+      }
+    }
+#endif
     // Ende der Buttons
   } while (!mfrc522.PICC_IsNewCardPresent());
 
@@ -762,7 +829,7 @@ void adminMenu() {
   Serial.println(F("=== adminMenu()"));
   knownCard = false;
 
-  int subMenu = voiceMenu(10, 900, 900, false, false, 0, true);
+  int subMenu = voiceMenu(11, 900, 900, false, false, 0, true);
   if (subMenu == 0)
     return;
   if (subMenu == 1) {
@@ -854,8 +921,32 @@ void adminMenu() {
       mySettings.invertVolumeButtons = false;
     }
   }
+  else if (subMenu == 11) {
+    Serial.println(F("Reset -> EEPROM wird gelöscht"));
+    for (int i = 0; i < EEPROM.length(); i++) {
+      EEPROM.update(i, 0);
+    }
+    resetSettings();
+    mp3.playMp3FolderTrack(999);
+  }
   writeSettingsToFlash();
   setstandbyTimer();
+}
+
+bool askCode(uint8_t *code) {
+  uint8_t x = 0;
+  while (x < 3) {
+    readButtons();
+    if (pauseButton.pressedFor(LONG_PRESS))
+      break;
+    if (pauseButton.wasReleased())
+      code[x++] = 1;
+    if (upButton.wasReleased())
+      code[x++] = 2;
+    if (downButton.wasReleased())
+      code[x++] = 3;
+  }
+  return true;
 }
 
 uint8_t voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
@@ -975,7 +1066,7 @@ void resetCard() {
   if (!mfrc522.PICC_ReadCardSerial())
     return;
 
-  Serial.print(F("Karte wird neu Konfiguriert!"));
+  Serial.print(F("Karte wird neu konfiguriert!"));
   setupCard();
 }
 
@@ -1233,7 +1324,7 @@ void setColor(int red, int green)
  }
 
 /**
-   Helper routine to dump a byte array as hex values to Serial.
+  Helper routine to dump a byte array as hex values to Serial.
 */
 void dump_byte_array(byte * buffer, byte bufferSize) {
   for (byte i = 0; i < bufferSize; i++) {
