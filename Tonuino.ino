@@ -626,7 +626,7 @@ void loop() {
 
     // Lautstärkepoti -- individuell
     PotiValue = analogRead(PotiPin);
-    PotiValue = map(PotiValue,0,1023,0,mySettings.maxVolume);
+    PotiValue = map(PotiValue,0,1023,mySettings.minVolume,mySettings.maxVolume);
 
     // Vergleiche aktueller Lautstärke-Potistellung mit der alten Stellung inkl. Hysterese
     if (PotiValue > oldPotiValue + PotiHysteresis || PotiValue < oldPotiValue - PotiHysteresis)  { 
@@ -644,22 +644,22 @@ void loop() {
       if (LightSensorValue > oldLightSensorValue + LightSensorHysteresis || LightSensorValue < oldLightSensorValue - LightSensorHysteresis)  { 
         if (LightSensorValue == 1012 or LightSensorValue == 1013) {
           Serial.println((String)LightSensorValue + " --> 4/4");
-          setColor(0, 30);
+          setColor(127, 0);
           oldLightSensorValue = LightSensorValue;
         }
         else if (LightSensorValue == 1014 or LightSensorValue == 1015 or LightSensorValue == 1016) {
           Serial.println((String)LightSensorValue + " --> 3/4");
-          setColor(255, 30);
+          setColor(127, 83);
           oldLightSensorValue = LightSensorValue;
         }
         else if (LightSensorValue == 1017 or LightSensorValue == 1018) {
           Serial.println((String)LightSensorValue + " --> 2/4");
-          setColor(255, 15);
+          setColor(83, 127);
           oldLightSensorValue = LightSensorValue;
         }
         else if (LightSensorValue == 1019 or LightSensorValue == 1020) {
           Serial.println((String)LightSensorValue + " --> 1/4");
-          setColor(255, 0);
+          setColor(0, 127);
           oldLightSensorValue = LightSensorValue;
         }
         else if (LightSensorValue == 1021 or LightSensorValue == 1022 or LightSensorValue == 1023) {
@@ -1319,8 +1319,8 @@ void writeCard(nfcTagObject nfcTag) {
 //RGB-LED ansteuern
 void setColor(int red, int green)
 {
-  red = 255 - red;
-  green = 255 - green;
+  red = red;
+  green = green;
   analogWrite(redPin, red);
   analogWrite(greenPin, green);
  }
