@@ -38,7 +38,7 @@ unsigned long TimeNow = 0;
 //byte mp3MaxVolume = 30;                       // maximal volume of DFPlayer Mini | nicht verwendet wg. MaxVolume aus neuer Tonuinoversion
 byte potilock;                                // Potilock DATA (0-1)
 int PotiPin = 6;                              // 10kOhm Poti at Pin A6
-int PotiHysteresis = 2;                        // Lautstärkepoti Hysterese (Standarteinstellung = 2)
+int PotiHysteresis = 0;                        // Lautstärkepoti Hysterese (Standardeinstellung = 2)
 int PotiValue;                                // Poti Value now, Lautstärke
 int oldPotiValue;                             // old Poti Value, Lautstärke
 
