@@ -342,7 +342,7 @@ MFRC522::StatusCode status;
 #define buttonFivePin A4
 #endif
 
-#define LONG_PRESS 5000 -- individuell
+#define LONG_PRESS 5000 // -- individuell 
 
 Button pauseButton(buttonPause);
 Button upButton(buttonUp);
@@ -387,9 +387,9 @@ void checkStandbyAtMillis() {
     mfrc522.PCD_AntennaOff();
     mfrc522.PCD_SoftPowerDown();
     mp3.sleep();
-    digitalwrite(statusLedPin, LOW);
-    digitalwrite(redPin, LOW);
-    digitalwrite(greenPin, LOW);
+    digitalWrite(statusLedPin, LOW);
+    digitalWrite(redPin, LOW);
+    digitalWrite(greenPin, LOW);
 
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
     cli();  // Disable interrupts
@@ -696,12 +696,12 @@ void loop() {
       if (ignorePauseButton == false)
         if (isPlaying()) {
           mp3.pause();
-          statusLedBlink(2000); --  individuell
+          statusLedBlink(2000); // -- individuell
           setstandbyTimer();
         }
         else if (knownCard) {
           mp3.start();
-          statusLedBlink(1000);  -- individuell
+          statusLedBlink(1000); // -- individuell
           disablestandbyTimer();
         }
       ignorePauseButton = false;
@@ -820,7 +820,7 @@ void loop() {
     randomSeed(millis() + random(1000));
     if (myCard.cookie == cardCookie && myFolder->folder != 0 && myFolder->mode != 0) {
       playFolder();
-      statusLedBlink(1000);  -- individuell
+      statusLedBlink(1000);  // -- individuell
     }
 
     // Neue Karte konfigurieren
