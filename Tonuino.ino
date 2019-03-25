@@ -23,8 +23,11 @@
 static const uint32_t cardCookie = 322417479;
 
 //RGB-LED -- individuell
-int redPin = 5;
-int greenPin = 6;
+const uint8_t redPin = 5;
+const uint8_t greenPin = 6;
+
+//Status-LED -- individuell
+const uint8_t statusLedPin = 7;
 
 // Lichtsensor -- individuell
 int LightSensorPin = 5;
@@ -37,8 +40,8 @@ unsigned long TimeNow = 0;
 // Poti zur Lautstärkeregelung
 //byte mp3MaxVolume = 30;                       // maximal volume of DFPlayer Mini | nicht verwendet wg. MaxVolume aus neuer Tonuinoversion
 byte potilock;                                // Potilock DATA (0-1)
-int PotiPin = 6;                              // 10kOhm Poti at Pin A6
-int PotiHysteresis = 0;                        // Lautstärkepoti Hysterese (Standardeinstellung = 2)
+const uint8_t PotiPin = 6;                              // 10kOhm Poti at Pin A6
+int PotiHysteresis = 0;                        // Lautstärkepoti Hysterese (Standarteinstellung = 0)
 int PotiValue;                                // Poti Value now, Lautstärke
 int oldPotiValue;                             // old Poti Value, Lautstärke
 
@@ -339,7 +342,7 @@ MFRC522::StatusCode status;
 #define buttonFivePin A4
 #endif
 
-#define LONG_PRESS 1000
+#define LONG_PRESS 5000 -- individuell
 
 Button pauseButton(buttonPause);
 Button upButton(buttonUp);
@@ -384,6 +387,9 @@ void checkStandbyAtMillis() {
     mfrc522.PCD_AntennaOff();
     mfrc522.PCD_SoftPowerDown();
     mp3.sleep();
+    digitalwrite(statusLedPin, LOW);
+    digitalwrite(redPin, LOW);
+    digitalwrite(greenPin, LOW);
 
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
     cli();  // Disable interrupts
@@ -426,8 +432,8 @@ void setup() {
   pinMode(busyPin, INPUT);
 
   // Status-LED für Powerbutton -- individuell
-  pinMode(7, OUTPUT);
-  digitalWrite(7, HIGH);
+  pinMode(statusLedPin, OUTPUT);
+  digitalWrite(statusLedPin, HIGH);
 
   //RGB-LED -- individuell
   pinMode(redPin, OUTPUT);
@@ -479,6 +485,7 @@ void setup() {
   */
   // Start Shortcut "at Startup" - e.g. Welcome Sound
   playShortCut(3);
+statusLedBlink(50);
 }
 
 void readButtons() {
@@ -689,10 +696,12 @@ void loop() {
       if (ignorePauseButton == false)
         if (isPlaying()) {
           mp3.pause();
+          statusLedBlink(2000); --  individuell
           setstandbyTimer();
         }
         else if (knownCard) {
           mp3.start();
+          statusLedBlink(1000);  -- individuell
           disablestandbyTimer();
         }
       ignorePauseButton = false;
@@ -811,6 +820,7 @@ void loop() {
     randomSeed(millis() + random(1000));
     if (myCard.cookie == cardCookie && myFolder->folder != 0 && myFolder->mode != 0) {
       playFolder();
+      statusLedBlink(1000);  -- individuell
     }
 
     // Neue Karte konfigurieren
@@ -1324,6 +1334,18 @@ void setColor(int red, int green)
   analogWrite(redPin, red);
   analogWrite(greenPin, green);
  }
+
+// Blinken der Status-LED im angegebenen Intervall in Millisekunden
+void statusLedBlink(uint16_t statusLedBlinkInterval) {
+  static bool statusLedState = true;
+  static uint64_t statusLedOldMillis;
+
+  if (millis() - statusLedOldMillis >= statusLedBlinkInterval) {
+    statusLedOldMillis = millis();
+    statusLedState = !statusLedState;
+    digitalWrite(statusLedPin, statusLedState);
+  }
+}
 
 /**
   Helper routine to dump a byte array as hex values to Serial.
