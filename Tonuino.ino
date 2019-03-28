@@ -28,13 +28,15 @@ const uint8_t greenPin = 6;
 
 //Status-LED -- individuell
 const uint8_t statusLedPin = 7;
+unsigned long timeNowStatusLed = 0;
+bool toggle = false;
 
 // Lichtsensor -- individuell
-int LightSensorPin = 5;
-int LightSensorHysteresis = 0;
-unsigned int LightSensorValue;
-unsigned int oldLightSensorValue;
-int period = 10000;
+const uint8_t LightSensorPin = 5;
+uint8_t LightSensorHysteresis = 0;
+uint8_t LightSensorValue;
+uint8_t oldLightSensorValue;
+uint16_t period = 10000;
 unsigned long TimeNow = 0;
 
 // Poti zur Lautstärkeregelung
@@ -342,7 +344,7 @@ MFRC522::StatusCode status;
 #define buttonFivePin A4
 #endif
 
-#define LONG_PRESS 5000 // -- individuell 
+#define LONG_PRESS 1000
 
 Button pauseButton(buttonPause);
 Button upButton(buttonUp);
@@ -433,7 +435,6 @@ void setup() {
 
   // Status-LED für Powerbutton -- individuell
   pinMode(statusLedPin, OUTPUT);
-  digitalWrite(statusLedPin, HIGH);
 
   //RGB-LED -- individuell
   pinMode(redPin, OUTPUT);
@@ -485,7 +486,6 @@ void setup() {
   */
   // Start Shortcut "at Startup" - e.g. Welcome Sound
   playShortCut(3);
-statusLedBlink(50);
 }
 
 void readButtons() {
@@ -631,6 +631,9 @@ void loop() {
     // doppelt belegt werden
     readButtons();
 
+    // Status-LED aktivieren
+    digitalWrite(statusLedPin, HIGH);
+
     // Lautstärkepoti -- individuell
     PotiValue = analogRead(PotiPin);
     PotiValue = map(PotiValue,0,1023,mySettings.minVolume,mySettings.maxVolume);
@@ -696,12 +699,10 @@ void loop() {
       if (ignorePauseButton == false)
         if (isPlaying()) {
           mp3.pause();
-          statusLedBlink(2000); // -- individuell
           setstandbyTimer();
         }
         else if (knownCard) {
           mp3.start();
-          statusLedBlink(1000); // -- individuell
           disablestandbyTimer();
         }
       ignorePauseButton = false;
@@ -820,7 +821,6 @@ void loop() {
     randomSeed(millis() + random(1000));
     if (myCard.cookie == cardCookie && myFolder->folder != 0 && myFolder->mode != 0) {
       playFolder();
-      statusLedBlink(1000);  // -- individuell
     }
 
     // Neue Karte konfigurieren
@@ -970,6 +970,7 @@ uint8_t voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
   Serial.print(numberOfOptions);
   Serial.println(F(" Options)"));
   do {
+    statusLedBlink(250);
     if (Serial.available() > 0) {
       int optionSerial = Serial.parseInt();
       if (optionSerial != 0 && optionSerial <= numberOfOptions)
@@ -1335,15 +1336,13 @@ void setColor(int red, int green)
   analogWrite(greenPin, green);
  }
 
-// Blinken der Status-LED im angegebenen Intervall in Millisekunden
-void statusLedBlink(uint16_t statusLedBlinkInterval) {
-  static bool statusLedState = true;
-  static uint64_t statusLedOldMillis;
-
-  if (millis() - statusLedOldMillis >= statusLedBlinkInterval) {
-    statusLedOldMillis = millis();
-    statusLedState = !statusLedState;
-    digitalWrite(statusLedPin, statusLedState);
+// Status-LED blinken
+void statusLedBlink(uint16_t intervall)
+{
+  if (millis() > timeNowStatusLed + intervall) {
+    timeNowStatusLed = millis();
+    toggle = !toggle;
+    digitalWrite(statusLedPin, toggle);
   }
 }
 
