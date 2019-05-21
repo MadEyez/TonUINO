@@ -93,6 +93,7 @@ adminSettings mySettings;
 nfcTagObject myCard;
 folderSettings *myFolder;
 unsigned long sleepAtMillis = 0;
+static uint16_t _lastTrackFinished;
 
 static void nextTrack(uint16_t track);
 uint8_t voiceMenu(int numberOfOptions, int startMessage, int messageOffset,
@@ -483,14 +484,17 @@ class RepeatSingleModifier: public Modifier {
   public:
     virtual bool handleNext() {
       Serial.println(F("== RepeatSingleModifier::handleNext() -> REPEAT CURRENT TRACK"));
+      delay(50);
+      if (isPlaying()) return true;
       mp3.playFolderTrack(myFolder->folder, currentTrack);
+      _lastTrackFinished = 0;
       return true;
     }
     RepeatSingleModifier() {
       Serial.println(F("=== RepeatSingleModifier()"));
     }
     uint8_t getActive() {
-      Serial.println(F("== KindergardenMode::getActive()"));
+      Serial.println(F("== RepeatSingleModifier::getActive()"));
       return 6;
     }
 };
@@ -530,8 +534,12 @@ class FeedbackModifier: public Modifier {
 };
 
 // Leider kann das Modul selbst keine Queue abspielen, daher müssen wir selbst die Queue verwalten
-static uint16_t _lastTrackFinished;
 static void nextTrack(uint16_t track) {
+  Serial.println(track);
+  if (activeModifier != NULL)
+    if (activeModifier->handleNext() == true)
+      return;
+
   if (track == _lastTrackFinished) {
     return;
   }
@@ -543,10 +551,6 @@ static void nextTrack(uint16_t track) {
     return;
 
   Serial.println(F("=== nextTrack()"));
-
-  if (activeModifier != NULL)
-    if (activeModifier->handleNext() == true)
-      return;
 
   if (myFolder->mode == 1 || myFolder->mode == 7) {
     Serial.println(F("Hörspielmodus ist aktiv -> keinen neuen Track spielen"));
@@ -662,6 +666,7 @@ MFRC522::StatusCode status;
 #define buttonDown A2
 #define busyPin 4
 #define shutdownPin 7
+#define openAnalogPin A7
 
 #ifdef FIVEBUTTONS
 #define buttonFourPin A3
@@ -742,7 +747,15 @@ void waitForTrackToFinish() {
 void setup() {
 
   Serial.begin(115200); // Es gibt ein paar Debug Ausgaben über die serielle Schnittstelle
-  randomSeed(analogRead(A7)); // Zufallsgenerator initialisieren
+   
+  // Wert für randomSeed() erzeugen durch das mehrfache Sammeln von rauschenden LSBs eines offenen Analogeingangs
+  uint32_t ADC_LSB;
+  uint32_t ADCSeed;
+  for(uint8_t i = 0; i < 128; i++) {
+    ADC_LSB = analogRead(openAnalogPin) & 0x1;
+    ADCSeed ^= ADC_LSB << (i % 32); 
+  }
+  randomSeed(ADCSeed); // Zufallsgenerator initialisieren
 
   // Dieser Hinweis darf nicht entfernt werden
   Serial.println(F("\n _____         _____ _____ _____ _____"));
@@ -871,7 +884,6 @@ void previousButton() {
 void playFolder() {
   Serial.println(F("== playFolder()")) ;
   disablestandbyTimer();
-  randomSeed(millis() + random(1000));
   knownCard = true;
   _lastTrackFinished = 0;
   numTracksInFolder = mp3.getFolderTrackCount(myFolder->folder);
@@ -1172,8 +1184,6 @@ void loop() {
     return;
 
   if (readCard(&myCard) == true) {
-    // make random a little bit more "random"
-    randomSeed(millis() + random(1000));
     if (myCard.cookie == cardCookie && myCard.nfcFolderSettings.folder != 0 && myCard.nfcFolderSettings.mode != 0) {
       playFolder();
     }
@@ -1545,10 +1555,12 @@ void resetCard() {
 
 bool setupFolder(folderSettings * theFolder) {
   // Ordner abfragen
-  theFolder->folder = voiceMenu(99, 301, 0, true);
+  theFolder->folder = voiceMenu(99, 301, 0, true, 0, 0, true);
+  if (theFolder->folder == 0) return false;
 
   // Wiedergabemodus abfragen
-  theFolder->mode = voiceMenu(9, 310, 310);
+  theFolder->mode = voiceMenu(9, 310, 310, false, 0, 0, true);
+  if (theFolder->mode == 0) return false;
 
   //  // Hörbuchmodus -> Fortschritt im EEPROM auf 1 setzen
   //  EEPROM.update(theFolder->folder, 1);
@@ -1561,7 +1573,7 @@ bool setupFolder(folderSettings * theFolder) {
   if (theFolder->mode == 6) {
     //theFolder->special = voiceMenu(3, 320, 320);
     theFolder->folder = 0;
-    theFolder->mode = 0;
+    theFolder->mode = 255;
   }
   // Spezialmodus Von-Bis
   if (theFolder->mode == 7 || theFolder->mode == 8 || theFolder->mode == 9) {
@@ -1570,21 +1582,23 @@ bool setupFolder(folderSettings * theFolder) {
     theFolder->special2 = voiceMenu(mp3.getFolderTrackCount(theFolder->folder), 322, 0,
                                     true, theFolder->folder, theFolder->special);
   }
+  return true;
 }
 
 void setupCard() {
   mp3.pause();
   Serial.println(F("=== setupCard()"));
   nfcTagObject newCard;
-  setupFolder(&newCard.nfcFolderSettings);
-  // Karte ist konfiguriert -> speichern
-  mp3.pause();
-  do {
-  } while (isPlaying());
-  if (newCard.nfcFolderSettings.folder != 0 && newCard.nfcFolderSettings.mode != 0)
+  if (setupFolder(&newCard.nfcFolderSettings) == true)
+  {
+    // Karte ist konfiguriert -> speichern
+    mp3.pause();
+    do {
+    } while (isPlaying());
     writeCard(newCard);
+  }
+  delay(1000);
 }
-
 bool readCard(nfcTagObject * nfcTag) {
   nfcTagObject tempCard;
   // Show some details of the PICC (that is: the tag/card)
@@ -1726,24 +1740,29 @@ bool readCard(nfcTagObject * nfcTag) {
           return false;
         }
       }
-      if (isPlaying()) {
-        mp3.playAdvertisement(260);
-      }
-      else {
-        mp3.start();
-        delay(100);
-        mp3.playAdvertisement(260);
-        delay(100);
-        mp3.pause();
+      if (tempCard.nfcFolderSettings.mode != 0 && tempCard.nfcFolderSettings.mode != 255) {
+        if (isPlaying()) {
+          mp3.playAdvertisement(260);
+        }
+        else {
+          mp3.start();
+          delay(100);
+          mp3.playAdvertisement(260);
+          delay(100);
+          mp3.pause();
+        }
       }
       switch (tempCard.nfcFolderSettings.mode ) {
-        case 0: mfrc522.PICC_HaltA(); mfrc522.PCD_StopCrypto1(); adminMenu(true);  break;
+        case 0:
+        case 255:
+          mfrc522.PICC_HaltA(); mfrc522.PCD_StopCrypto1(); adminMenu(true);  break;
         case 1: activeModifier = new SleepTimer(tempCard.nfcFolderSettings.special); break;
         case 2: activeModifier = new FreezeDance(); break;
         case 3: activeModifier = new Locked(); break;
         case 4: activeModifier = new ToddlerMode(); break;
         case 5: activeModifier = new KindergardenMode(); break;
         case 6: activeModifier = new RepeatSingleModifier(); break;
+
       }
       delay(2000);
       return false;
